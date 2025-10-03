@@ -6,9 +6,15 @@ public class Projectile : MonoBehaviour
     public float speed = 10f;
     public float lifetime = 3f;
     public bool isHoming = true;
+    public bool destroyOnHit = true;
+    
+    [Header("Targeting")]
+    public string targetTag = "Enemy";
+    public LayerMask targetLayerMask = -1;
     
     [Header("Visual Effects")]
     public GameObject hitEffect;
+    public GameObject trailEffect;
     
     private Enemy target;
     private float damage;
@@ -48,21 +54,33 @@ public class Projectile : MonoBehaviour
     
     private void OnTriggerEnter2D(Collider2D other)
     {
-        Enemy enemy = other.GetComponent<Enemy>();
-        if (enemy != null)
+        // Check if the collider has the target tag and layer
+        if (other.CompareTag(targetTag) && IsInTargetLayer(other.gameObject))
         {
-            // Deal damage
-            enemy.TakeDamage(damage);
-            
-            // Create hit effect
-            if (hitEffect != null)
+            Enemy enemy = other.GetComponent<Enemy>();
+            if (enemy != null)
             {
-                Instantiate(hitEffect, transform.position, transform.rotation);
+                // Deal damage
+                enemy.TakeDamage(damage);
+                
+                // Create hit effect
+                if (hitEffect != null)
+                {
+                    Instantiate(hitEffect, transform.position, transform.rotation);
+                }
+                
+                // Destroy projectile if configured to do so
+                if (destroyOnHit)
+                {
+                    DestroyProjectile();
+                }
             }
-            
-            // Destroy projectile
-            DestroyProjectile();
         }
+    }
+    
+    private bool IsInTargetLayer(GameObject obj)
+    {
+        return (targetLayerMask.value & (1 << obj.layer)) != 0;
     }
     
     public void SetTarget(Enemy enemy)

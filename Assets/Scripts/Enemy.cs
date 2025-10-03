@@ -3,14 +3,8 @@ using System.Collections;
 
 public class Enemy : MonoBehaviour
 {
-    [Header("Enemy Stats")]
-    public string enemyName = "Basic Enemy";
-    public float maxHealth = 100f;
-    public float speed = 2f;
-    public int reward = 10;
-    
-    [Header("Terrain Interaction")]
-    public bool affectedByTerrain = true;
+    [Header("Enemy Configuration")]
+    public EnemyType enemyType;
     
     [Header("Visual")]
     public SpriteRenderer spriteRenderer;
@@ -18,8 +12,12 @@ public class Enemy : MonoBehaviour
     // Runtime variables
     private float currentHealth;
     private bool isDead = false;
+    private bool isFalling = false;
     private Vector3Int lastGridPosition;
-    private TerrainData currentTerrainData;
+    private TerrainBehavior currentTerrainBehavior;
+    private Vector3 startPosition;
+    private float baseSpeed;
+    private float baseHealth;
     
     // Events
     public System.Action<Enemy> OnEnemyDied;
@@ -27,19 +25,48 @@ public class Enemy : MonoBehaviour
     
     private void Start()
     {
-        currentHealth = maxHealth;
+        InitializeFromEnemyType();
+        
+        startPosition = transform.position;
         
         // Initialize terrain tracking
         lastGridPosition = TerrainManager.Instance.WorldToGrid(transform.position);
         UpdateTerrainEffects();
     }
     
+    private void InitializeFromEnemyType()
+    {
+        if (enemyType == null) return;
+        
+        // Đặt giá trị cơ bản từ EnemyType
+        baseHealth = enemyType.maxHealth;
+        baseSpeed = enemyType.speed;
+        currentHealth = baseHealth;
+        
+        // Áp dụng cài đặt hình ảnh
+        if (spriteRenderer != null && enemyType.enemySprite != null)
+        {
+            spriteRenderer.sprite = enemyType.enemySprite;
+            spriteRenderer.color = enemyType.enemyColor;
+            spriteRenderer.transform.localScale = Vector3.one * enemyType.spriteScale;
+        }
+    }
+    
     private void Update()
     {
         if (isDead) return;
         
+        if (isFalling)
+        {
+            HandleFalling();
+            return;
+        }
+        
         // Update terrain effects
         UpdateTerrainTracking();
+        
+        // Check if enemy should fall
+        CheckForFall();
         
         // Move towards target
         MoveTowardsTarget();
@@ -59,23 +86,87 @@ public class Enemy : MonoBehaviour
     // Cập nhật hiệu ứng địa hình: Lấy thông tin địa hình hiện tại để áp dụng bonus/penalty
     private void UpdateTerrainEffects()
     {
-        if (!affectedByTerrain || TerrainManager.Instance == null) return;
+        if (!enemyType.affectedByTerrain || TerrainManager.Instance == null) return;
         
-        // Lấy dữ liệu địa hình tại vị trí hiện tại (Ground/Air/Water)
-        currentTerrainData = TerrainManager.Instance.GetTerrainData(lastGridPosition);
+        // Lấy behavior địa hình tại vị trí hiện tại
+        currentTerrainBehavior = TerrainManager.Instance.GetTerrainBehavior(lastGridPosition);
+        
+        // Áp dụng behavior nếu có
+        if (currentTerrainBehavior != null)
+        {
+            currentTerrainBehavior.ApplyToEnemy(this);
+        }
+    }
+    
+    // Kiểm tra xem enemy có nên rơi không (Tiny Defense mechanic)
+    private void CheckForFall()
+    {
+        if (enemyType.isFlying || !enemyType.canFall || isFalling) return;
+        
+        // Kiểm tra vị trí hiện tại và vị trí tiếp theo
+        Vector3Int currentGridPos = TerrainManager.Instance.WorldToGrid(transform.position);
+        Vector3 nextPosition = transform.position + enemyType.moveDirection * GetEffectiveSpeed() * Time.deltaTime;
+        Vector3Int nextGridPos = TerrainManager.Instance.WorldToGrid(nextPosition);
+        
+        // Nếu vị trí tiếp theo khác với vị trí hiện tại
+        if (nextGridPos != currentGridPos)
+        {
+            TerrainBehavior nextTerrainBehavior = TerrainManager.Instance.GetTerrainBehavior(nextGridPos);
+            TerrainBehavior currentTerrainBehavior = TerrainManager.Instance.GetTerrainBehavior(currentGridPos);
+            
+            // Kiểm tra nếu enemy đang ở trên solid ground và bước tiếp theo không phải solid ground
+            if (currentTerrainBehavior != null && currentTerrainBehavior.isSolidGround &&
+                nextTerrainBehavior != null && !nextTerrainBehavior.isSolidGround)
+            {
+                // Enemy sẽ rơi!
+                StartFalling();
+            }
+        }
+    }
+    
+    // Bắt đầu rơi
+    private void StartFalling()
+    {
+        isFalling = true;
+        // Có thể thêm hiệu ứng âm thanh hoặc animation ở đây
+    }
+    
+    // Xử lý khi enemy đang rơi
+    private void HandleFalling()
+    {
+        // Rơi xuống dưới
+        transform.position += Vector3.down * fallSpeed * Time.deltaTime;
+        
+        // Kiểm tra xem có chạm đất không
+        Vector3Int gridPos = TerrainManager.Instance.WorldToGrid(transform.position);
+        TerrainData terrainData = TerrainManager.Instance.GetTerrainData(gridPos);
+        
+        if (terrainData != null && terrainData.isSolidGround)
+        {
+            // Chạm đất - dừng rơi
+            isFalling = false;
+        }
+        else if (terrainData != null && terrainData.killsEnemiesOnFall)
+        {
+            // Rơi vào void - chết
+            Die();
+        }
+        else if (transform.position.y < fallDeathHeight) // Rơi quá xa - chết
+        {
+            Die();
+        }
     }
     
     private void MoveTowardsTarget()
     {
-        // Simple movement towards the right side of the screen
-        Vector3 targetPosition = transform.position + Vector3.right * 10f;
-        Vector3 direction = (targetPosition - transform.position).normalized;
-        
+        // Di chuyển theo hướng đã cấu hình
+        Vector3 direction = enemyType.moveDirection.normalized;
         float moveSpeed = GetEffectiveSpeed();
         transform.position += direction * moveSpeed * Time.deltaTime;
         
-        // Check if reached the end
-        if (transform.position.x > 15f)
+        // Kiểm tra xem đã đến cuối chưa dựa trên khoảng cách từ vị trí bắt đầu
+        float distanceTraveled = Vector3.Distance(startPosition, transform.position);
+        if (distanceTraveled >= enemyType.moveDistance)
         {
             ReachedEnd();
         }
@@ -84,15 +175,15 @@ public class Enemy : MonoBehaviour
     // Tính tốc độ thực tế: Base speed * hệ số từ địa hình (ví dụ: Water = x0.5, Ground = x1.0)
     private float GetEffectiveSpeed()
     {
-        float baseSpeed = speed;
+        float effectiveSpeed = baseSpeed;
         
-        if (affectedByTerrain && currentTerrainData != null)
+        // Áp dụng multiplier từ terrain behavior hiện tại
+        if (currentTerrainBehavior != null)
         {
-            // Nhân với hệ số tốc độ từ địa hình (Tiny Defense mechanic)
-            baseSpeed *= currentTerrainData.movementSpeedMultiplier;
+            effectiveSpeed *= currentTerrainBehavior.movementSpeedMultiplier;
         }
         
-        return baseSpeed;
+        return effectiveSpeed;
     }
     
     public void TakeDamage(float damage)
@@ -157,6 +248,33 @@ public class Enemy : MonoBehaviour
     
     public float GetHealthPercentage()
     {
-        return currentHealth / maxHealth;
+        return currentHealth / baseHealth;
+    }
+    
+    // Public methods for TerrainBehavior to call
+    public void ApplySpeedMultiplier(float multiplier)
+    {
+        baseSpeed = enemyType.speed * multiplier;
+    }
+    
+    public void ApplyHealthMultiplier(float multiplier)
+    {
+        baseHealth = enemyType.maxHealth * multiplier;
+        currentHealth = baseHealth;
+    }
+    
+    public void EnableFallingDetection(float threshold)
+    {
+        // Triển khai phát hiện rơi
+    }
+    
+    public void TriggerSplashEffect()
+    {
+        // Triển khai hiệu ứng splash
+    }
+    
+    public int GetReward()
+    {
+        return enemyType.reward;
     }
 }

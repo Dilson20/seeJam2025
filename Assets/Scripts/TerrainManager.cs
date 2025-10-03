@@ -13,9 +13,20 @@ public class TerrainManager : MonoBehaviour
     [Header("Terrain Tile Mapping")]
     public TerrainTileMapping[] terrainTileMappings;
     
+    [Header("Terrain Behavior Mapping")]
+    public TerrainBehaviorMapping[] terrainBehaviorMappings;
+    
+    [System.Serializable]
+    public class TerrainBehaviorMapping
+    {
+        public TerrainType terrainType;
+        public TerrainBehavior terrainBehavior;
+    }
+    
     // Cache for terrain data lookup
     private Dictionary<Vector3Int, TerrainData> terrainCache = new Dictionary<Vector3Int, TerrainData>();
     private Dictionary<TileBase, TerrainType> tileToTerrainType = new Dictionary<TileBase, TerrainType>();
+    private Dictionary<TerrainType, TerrainBehavior> terrainTypeToBehavior = new Dictionary<TerrainType, TerrainBehavior>();
     
     [System.Serializable]
     public class TerrainTileMapping
@@ -47,6 +58,15 @@ public class TerrainManager : MonoBehaviour
             if (mapping.tile != null)
             {
                 tileToTerrainType[mapping.tile] = mapping.terrainType;
+            }
+        }
+        
+        // Build the mapping from terrain types to behaviors
+        foreach (var mapping in terrainBehaviorMappings)
+        {
+            if (mapping.terrainBehavior != null)
+            {
+                terrainTypeToBehavior[mapping.terrainType] = mapping.terrainBehavior;
             }
         }
     }
@@ -82,10 +102,18 @@ public class TerrainManager : MonoBehaviour
         return defaultTerrain;
     }
     
+    // Kiểm tra xem có thể đặt tháp tại vị trí này không
     public bool CanPlaceTower(Vector3Int gridPosition)
     {
         TerrainData terrainData = GetTerrainData(gridPosition);
         return terrainData != null && terrainData.allowsTowerPlacement;
+    }
+    
+    // Kiểm tra xem có thể spawn enemy tại vị trí này không
+    public bool CanSpawnEnemy(Vector3Int gridPosition)
+    {
+        TerrainData terrainData = GetTerrainData(gridPosition);
+        return terrainData != null && terrainData.allowsEnemySpawn;
     }
     
     public bool CanMoveThrough(Vector3Int gridPosition)
@@ -116,7 +144,7 @@ public class TerrainManager : MonoBehaviour
         terrainCache.Clear();
     }
     
-    // Get all positions that can spawn enemies
+    // Lấy tất cả vị trí có thể spawn enemy (có tính trọng số)
     public List<Vector3Int> GetValidSpawnPositions()
     {
         List<Vector3Int> spawnPositions = new List<Vector3Int>();
@@ -130,7 +158,8 @@ public class TerrainManager : MonoBehaviour
                 Vector3Int pos = new Vector3Int(x, y, 0);
                 TerrainData terrainData = GetTerrainData(pos);
                 
-                if (terrainData != null && terrainData.allowsMovement && terrainData.enemySpawnWeight > 0)
+                // Chỉ thêm vị trí nếu cho phép spawn enemy và có trọng số > 0
+                if (terrainData != null && terrainData.allowsEnemySpawn && terrainData.enemySpawnWeight > 0)
                 {
                     spawnPositions.Add(pos);
                 }
@@ -138,5 +167,49 @@ public class TerrainManager : MonoBehaviour
         }
         
         return spawnPositions;
+    }
+    
+    // Lấy vị trí spawn ngẫu nhiên dựa trên trọng số của từng địa hình
+    public Vector3Int GetRandomSpawnPosition()
+    {
+        List<Vector3Int> validPositions = GetValidSpawnPositions();
+        if (validPositions.Count == 0) return Vector3Int.zero;
+        
+        // Tính tổng trọng số
+        float totalWeight = 0f;
+        foreach (var pos in validPositions)
+        {
+            TerrainData terrainData = GetTerrainData(pos);
+            totalWeight += terrainData.enemySpawnWeight;
+        }
+        
+        // Chọn vị trí ngẫu nhiên dựa trên trọng số
+        float randomValue = Random.Range(0f, totalWeight);
+        float currentWeight = 0f;
+        
+        foreach (var pos in validPositions)
+        {
+            TerrainData terrainData = GetTerrainData(pos);
+            currentWeight += terrainData.enemySpawnWeight;
+            
+            if (randomValue <= currentWeight)
+            {
+                return pos;
+            }
+        }
+        
+        // Fallback - trả về vị trí đầu tiên
+        return validPositions[0];
+    }
+    
+    // Lấy behavior địa hình tại vị trí grid
+    public TerrainBehavior GetTerrainBehavior(Vector3Int gridPosition)
+    {
+        TerrainData terrainData = GetTerrainData(gridPosition);
+        if (terrainData != null && terrainTypeToBehavior.ContainsKey(terrainData.terrainType))
+        {
+            return terrainTypeToBehavior[terrainData.terrainType];
+        }
+        return null;
     }
 }

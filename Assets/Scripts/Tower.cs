@@ -10,12 +10,18 @@ public class Tower : MonoBehaviour
     public float damage = 10f;
     public float range = 3f;
     public float fireRate = 1f; // shots per second
+    public float rotationSpeed = 90f; // degrees per second
     
     [Header("Visual")]
     public GameObject projectilePrefab;
     public Transform firePoint;
     public Transform turretPivot; // The part that rotates
     public SpriteRenderer towerSprite;
+    
+    [Header("Targeting")]
+    public bool autoTarget = true; // Should tower automatically target enemies?
+    public string targetTag = "Enemy"; // Tag of enemies to target
+    public LayerMask targetLayerMask = -1; // Layer mask for targeting
     
     [Header("Terrain Bonuses")]
     public bool receivesTerrainBonuses = true;
@@ -35,12 +41,15 @@ public class Tower : MonoBehaviour
     
     private void Update()
     {
-        UpdateTarget();
-        
-        if (currentTarget != null)
+        if (autoTarget)
         {
-            RotateTowardsTarget();
-            TryFire();
+            UpdateTarget();
+            
+            if (currentTarget != null)
+            {
+                RotateTowardsTarget();
+                TryFire();
+            }
         }
     }
     
@@ -124,20 +133,32 @@ public class Tower : MonoBehaviour
     
     private void OnTriggerEnter2D(Collider2D other)
     {
-        Enemy enemy = other.GetComponent<Enemy>();
-        if (enemy != null && !enemiesInRange.Contains(enemy))
+        // Check if the collider has the target tag and layer
+        if (other.CompareTag(targetTag) && IsInTargetLayer(other.gameObject))
         {
-            enemiesInRange.Add(enemy);
+            Enemy enemy = other.GetComponent<Enemy>();
+            if (enemy != null && !enemiesInRange.Contains(enemy))
+            {
+                enemiesInRange.Add(enemy);
+            }
         }
     }
     
     private void OnTriggerExit2D(Collider2D other)
     {
-        Enemy enemy = other.GetComponent<Enemy>();
-        if (enemy != null)
+        if (other.CompareTag(targetTag) && IsInTargetLayer(other.gameObject))
         {
-            enemiesInRange.Remove(enemy);
+            Enemy enemy = other.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                enemiesInRange.Remove(enemy);
+            }
         }
+    }
+    
+    private bool IsInTargetLayer(GameObject obj)
+    {
+        return (targetLayerMask.value & (1 << obj.layer)) != 0;
     }
     
     private void UpdateTerrainBonuses()
