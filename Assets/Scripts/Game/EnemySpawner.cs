@@ -5,40 +5,49 @@ using UnityEngine;
 public class EnemySpawner : MonoBehaviour
 {
     public static EnemySpawner instance;
-    void Awake(){instance=this;}
+    void Awake() { instance = this; }
 
-    //Enemy prefabs
+    // Enemy prefabs
     public List<GameObject> prefabs;
-    //Enemy spawn root points
+    // Enemy spawn root points
     public List<Transform> spawnPoints;
-    //Enemy spawn interval
-    public float spawnInterval=2f;
+    // Enemy spawn interval
+    public float spawnInterval = 2f;
 
+    // ✅ Danh sách lưu vị trí gốc
+    private List<Vector3> originalSpawnPositions = new List<Vector3>();
+
+    void Start()
+    {
+        // Lưu lại vị trí gốc của các spawn point
+        foreach (Transform point in spawnPoints)
+        {
+            originalSpawnPositions.Add(point.position);
+        }
+
+        StartSpawning();
+    }
 
     public void StartSpawning()
     {
-        //Call the spawn coroutine
         StartCoroutine(SpawnDelay());
     }
 
     IEnumerator SpawnDelay()
     {
-        //Call the spawn method
         SpawnEnemy();
-        //Wait spawn interval
         yield return new WaitForSeconds(spawnInterval);
-        //Recall the same coroutine
         StartCoroutine(SpawnDelay());
     }
 
     void SpawnEnemy()
     {
-        //Randomize the enemy spawned
-        int randomPrefabID = Random.Range(0,prefabs.Count);
-        //Randomize the spawn point 
-        int randomSpawnPointID = Random.Range(0,spawnPoints.Count);
-        //Instantiate the enemy prefab
-        GameObject spawnedEnemy = Instantiate(prefabs[randomPrefabID],spawnPoints[randomSpawnPointID]);        
-    }
+        int randomPrefabID = Random.Range(0, prefabs.Count);
+        int randomSpawnPointID = Random.Range(0, originalSpawnPositions.Count);
 
+        // ✅ Lấy đúng vị trí gốc ban đầu
+        Vector3 spawnPosition = originalSpawnPositions[randomSpawnPointID];
+
+        Instantiate(prefabs[randomPrefabID], spawnPosition, Quaternion.identity);
+    }
 }
