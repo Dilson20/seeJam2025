@@ -2,52 +2,82 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+[System.Serializable]
+public class EnemySquad
+{
+    public string squadName = "Squad";          // Tên squad
+    public List<GameObject> enemies = new();    // Danh sách enemy trong squad
+}
+
 public class EnemySpawner : MonoBehaviour
 {
     public static EnemySpawner instance;
     void Awake() { instance = this; }
 
-    // Enemy prefabs
-    public List<GameObject> prefabs;
-    // Enemy spawn root points
-    public List<Transform> spawnPoints;
-    // Enemy spawn interval
-    public float spawnInterval = 2f;
+    public float spawnInterval = 2f;                      // Thời gian giữa các lượt spawn
 
-    // ✅ Danh sách lưu vị trí gốc
-    private List<Vector3> originalSpawnPositions = new List<Vector3>();
+    public List<Transform> spawnPoints = new();           // Danh sách điểm spawn
+
+    public List<EnemySquad> spawnSquads = new();          // Danh sách đội hình enemy
+
+    private Coroutine spawnRoutine;                       // Dùng để quản lý coroutine
 
     void Start()
     {
-        // Lưu lại vị trí gốc của các spawn point
-        foreach (Transform point in spawnPoints)
-        {
-            originalSpawnPositions.Add(point.position);
-        }
-
+        // ✅ Gọi hàm bắt đầu spawn
         StartSpawning();
     }
 
     public void StartSpawning()
     {
-        StartCoroutine(SpawnDelay());
+        // Ngăn chạy trùng coroutine
+        if (spawnRoutine == null)
+            spawnRoutine = StartCoroutine(SpawnLoop());
     }
 
-    IEnumerator SpawnDelay()
+    public void StopSpawning()
     {
-        SpawnEnemy();
-        yield return new WaitForSeconds(spawnInterval);
-        StartCoroutine(SpawnDelay());
+        if (spawnRoutine != null)
+        {
+            StopCoroutine(spawnRoutine);
+            spawnRoutine = null;
+        }
     }
 
-    void SpawnEnemy()
+    IEnumerator SpawnLoop()
     {
-        int randomPrefabID = Random.Range(0, prefabs.Count);
-        int randomSpawnPointID = Random.Range(0, originalSpawnPositions.Count);
+        while (true)
+        {
+            SpawnEnemySquad();
+            yield return new WaitForSeconds(spawnInterval);
+        }
+    }
 
-        // ✅ Lấy đúng vị trí gốc ban đầu
-        Vector3 spawnPosition = originalSpawnPositions[randomSpawnPointID];
+    void SpawnEnemySquad()
+    {
+        if (spawnSquads.Count == 0 || spawnPoints.Count == 0)
+        {
+            Debug.LogWarning("⚠️ Chưa có squad hoặc spawn point nào được gán!");
+            return;
+        }
 
-        Instantiate(prefabs[randomPrefabID], spawnPosition, Quaternion.identity);
+        // Random 1 squad
+        int randomSquadID = Random.Range(0, spawnSquads.Count);
+        EnemySquad selectedSquad = spawnSquads[randomSquadID];
+
+        // Random 1 vị trí spawn
+        int randomSpawnPointID = Random.Range(0, spawnPoints.Count);
+        Vector3 spawnPosition = spawnPoints[randomSpawnPointID].position;
+
+        // Spawn tất cả enemy trong squad tại cùng vị trí
+        foreach (GameObject enemyPrefab in selectedSquad.enemies)
+        {
+            if (enemyPrefab != null)
+            {
+                Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+            }
+        }
+
+        Debug.Log($"🌀 Spawned {selectedSquad.squadName} tại {spawnPoints[randomSpawnPointID].name}");
     }
 }
