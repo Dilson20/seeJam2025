@@ -285,13 +285,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 99768eedff841074a8d7f4a2f6f9ea12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemySpawner
-  prefabs:
-  - {fileID: 5306756895356062872, guid: 22b4cb1f25536e94e85cdc63ddad880d, type: 3}
-  - {fileID: 8205858508050889942, guid: 56cd15a02573a284192ca5579a8beee6, type: 3}
+  spawnInterval: 3
   spawnPoints:
   - {fileID: 1802597209}
   - {fileID: 1801987139}
-  spawnInterval: 3
+  spawnSquads:
+  - squadName: Squad 1
+    enemies:
+    - {fileID: 5306756895356062872, guid: 22b4cb1f25536e94e85cdc63ddad880d, type: 3}
+    - {fileID: 8205858508050889942, guid: 56cd15a02573a284192ca5579a8beee6, type: 3}
+    - {fileID: 5306756895356062872, guid: 22b4cb1f25536e94e85cdc63ddad880d, type: 3}
 --- !u!4 &862080850
 Transform:
   m_ObjectHideFlags: 0
