@@ -33,7 +33,7 @@ public class Tower_Pink : Tower
     {
         GameManager.instance.currency.Gain(incomeValue);
         StartCoroutine(CoinIndication());
-    }  
+    }
     //Show coin indication over the tower for short time (0.5 second)
     IEnumerator CoinIndication()
     {
